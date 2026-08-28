@@ -1,0 +1,46 @@
+version: 2
+
+project_name: postship
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: postship
+    main: .
+    binary: postship
+    ldflags:
+      - -s -w -X github.com/byunguk/postship/cmd/postship.Version={{.Version}}
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  github:
+    owner: byunguk
+    name: postship
+
+brews:
+  - name: postship
+    repository:
+      owner: byunguk
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/byunguk/postship"
+    description: "Publish Markdown to Git while uploading local images to Cloudflare R2"
+    license: "MIT"
+    install: |
+      bin.install "postship"
+    test: |
+      system "#{bin}/postship", "version"
