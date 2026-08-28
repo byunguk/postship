@@ -52,7 +52,7 @@ func Execute() {
 }
 
 func usage() {
-	fmt.Println(`PostShip - publish Markdown + images to a static blog
+	fmt.Print(`PostShip - publish Markdown + images to a static blog
 
 Usage:
   postship init

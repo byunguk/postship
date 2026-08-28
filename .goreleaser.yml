@@ -30,17 +30,24 @@ release:
     owner: byunguk
     name: postship
 
-brews:
+homebrew_casks:
   - name: postship
     repository:
       owner: byunguk
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: Formula
+
     homepage: "https://github.com/byunguk/postship"
     description: "Publish Markdown to Git while uploading local images to Cloudflare R2"
     license: "MIT"
-    install: |
-      bin.install "postship"
-    test: |
-      system "#{bin}/postship", "version"
+
+    binaries:
+      - postship
+
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr",
+              args: ["-dr", "com.apple.quarantine", "#{staged_path}/postship"]
+          end
