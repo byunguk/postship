@@ -20,6 +20,9 @@ type Options struct {
 }
 
 var markdownImage = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
+var frontmatterSlug = regexp.MustCompile(`(?m)^slug\s*:\s*["\']?([^"\'\r\n#]+)["\']?\s*(?:#.*)?$`)
+var invalidSlugChars = regexp.MustCompile(`[^a-z0-9-]+`)
+var repeatedHyphens = regexp.MustCompile(`-+`)
 
 func Run(articleDir string, opts Options) error {
 	cfg, _, err := config.Load()
@@ -43,10 +46,11 @@ func Run(articleDir string, opts Options) error {
 		return err
 	}
 
-	slug := filepath.Base(articleDir)
-	if slug == "." || slug == string(filepath.Separator) || slug == "" {
-		slug = strings.TrimSuffix(filepath.Base(mdPath), filepath.Ext(mdPath))
+	slug, slugSource, err := resolveSlug(string(content), articleDir, mdPath)
+	if err != nil {
+		return err
 	}
+	fmt.Printf("Using slug: %s (%s)\n", slug, slugSource)
 
 	matches := markdownImage.FindAllStringSubmatch(string(content), -1)
 	if len(matches) == 0 {
@@ -128,6 +132,61 @@ func Run(articleDir string, opts Options) error {
 		fmt.Println("Pushed to GitHub. Cloudflare Pages should deploy from the GitHub update.")
 	}
 	return nil
+}
+
+func resolveSlug(content, articleDir, mdPath string) (string, string, error) {
+	if slug := slugFromFrontmatter(content); slug != "" {
+		normalized := normalizeSlug(slug)
+		if normalized == "" {
+			return "", "", fmt.Errorf("frontmatter slug %q does not contain any URL-safe characters", slug)
+		}
+		return normalized, "frontmatter", nil
+	}
+
+	fallback := filepath.Base(articleDir)
+	if fallback == "." || fallback == string(filepath.Separator) || fallback == "" {
+		fallback = strings.TrimSuffix(filepath.Base(mdPath), filepath.Ext(mdPath))
+	}
+	normalized := normalizeSlug(fallback)
+	if normalized == "" {
+		return "", "", fmt.Errorf("cannot derive a valid slug from article directory %q", articleDir)
+	}
+	return normalized, "article directory", nil
+}
+
+func slugFromFrontmatter(content string) string {
+	content = strings.TrimPrefix(content, "\ufeff")
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return ""
+	}
+
+	end := -1
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			end = i
+			break
+		}
+	}
+	if end == -1 {
+		return ""
+	}
+
+	frontmatter := strings.Join(lines[1:end], "\n")
+	m := frontmatterSlug.FindStringSubmatch(frontmatter)
+	if len(m) < 2 {
+		return ""
+	}
+	return strings.TrimSpace(m[1])
+}
+
+func normalizeSlug(slug string) string {
+	slug = strings.ToLower(strings.TrimSpace(slug))
+	slug = strings.ReplaceAll(slug, "_", "-")
+	slug = strings.ReplaceAll(slug, " ", "-")
+	slug = invalidSlugChars.ReplaceAllString(slug, "-")
+	slug = repeatedHyphens.ReplaceAllString(slug, "-")
+	return strings.Trim(slug, "-")
 }
 
 func findMarkdown(dir string) (string, error) {

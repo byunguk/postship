@@ -68,6 +68,7 @@ Example Markdown:
 ```markdown
 ---
 title: "Know This Before Buying a Tesla"
+slug: "know-this-before-buying-a-tesla"
 description: "Important things to know before buying a Tesla."
 publishDate: 2026-08-28
 ---
@@ -85,22 +86,24 @@ Publish:
 postship publish ./buying-a-tesla
 ```
 
-PostShip uploads the image to a key like:
+PostShip uses the frontmatter `slug` as the canonical publishing slug. If `slug` is omitted, it falls back to the article directory name. The same slug is used for both the published Markdown filename and the R2 object path.
+
+For the example above, PostShip uploads the image to:
 
 ```text
-articles/buying-a-tesla/charging.webp
+articles/know-this-before-buying-a-tesla/charging.webp
 ```
 
 and rewrites the published Markdown image URL to:
 
 ```text
-https://images.example.com/articles/buying-a-tesla/charging.webp
+https://images.example.com/articles/know-this-before-buying-a-tesla/charging.webp
 ```
 
 The final Markdown file is written to your configured content directory as:
 
 ```text
-src/content/blog/buying-a-tesla.md
+src/content/blog/know-this-before-buying-a-tesla.md
 ```
 
 Then PostShip runs `git add`, `git commit`, and `git push`.
