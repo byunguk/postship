@@ -55,3 +55,20 @@ func TestNormalizeSlug(t *testing.T) {
 		t.Fatalf("normalizeSlug() = %q, want %q", got, "my-custom-slug")
 	}
 }
+
+func TestImageReferencesIncludesMarkdownAndHTML(t *testing.T) {
+	content := `![Markdown image](images/markdown.png)
+<figure><img class="article-image" src="images/html.jpg" alt="HTML image" /></figure>
+<IMG SRC='images/uppercase.webp'>`
+
+	got := imageReferences(content)
+	want := []string{"images/markdown.png", "images/html.jpg", "images/uppercase.webp"}
+	if len(got) != len(want) {
+		t.Fatalf("imageReferences() = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("imageReferences()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}

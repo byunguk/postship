@@ -20,6 +20,7 @@ type Options struct {
 }
 
 var markdownImage = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
+var htmlImage = regexp.MustCompile(`(?i)<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>`)
 var frontmatterSlug = regexp.MustCompile(`(?m)^slug\s*:\s*["\']?([^"\'\r\n#]+)["\']?\s*(?:#.*)?$`)
 var invalidSlugChars = regexp.MustCompile(`[^a-z0-9-]+`)
 var repeatedHyphens = regexp.MustCompile(`-+`)
@@ -52,21 +53,20 @@ func Run(articleDir string, opts Options) error {
 	}
 	fmt.Printf("Using slug: %s (%s)\n", slug, slugSource)
 
-	matches := markdownImage.FindAllStringSubmatch(string(content), -1)
-	if len(matches) == 0 {
-		fmt.Println("No local Markdown images found; continuing with article only.")
+	refs := imageReferences(string(content))
+	if len(refs) == 0 {
+		fmt.Println("No local images found; continuing with article only.")
 	}
 
 	result := string(content)
 	client := r2.New(cfg.R2)
 	seen := map[string]string{}
 
-	for _, m := range matches {
-		ref := strings.TrimSpace(m[2])
+	for _, ref := range refs {
 		if isRemote(ref) || strings.HasPrefix(ref, "data:") {
 			continue
 		}
-		cleanRef := strings.Fields(ref)[0]
+		cleanRef := ref
 		imgPath := cleanRef
 		if !filepath.IsAbs(imgPath) {
 			imgPath = filepath.Join(filepath.Dir(mdPath), filepath.FromSlash(cleanRef))
@@ -132,6 +132,20 @@ func Run(articleDir string, opts Options) error {
 		fmt.Println("Pushed to GitHub. Cloudflare Pages should deploy from the GitHub update.")
 	}
 	return nil
+}
+
+func imageReferences(content string) []string {
+	refs := make([]string, 0)
+	for _, match := range markdownImage.FindAllStringSubmatch(content, -1) {
+		ref := strings.TrimSpace(match[2])
+		if fields := strings.Fields(ref); len(fields) > 0 {
+			refs = append(refs, fields[0])
+		}
+	}
+	for _, match := range htmlImage.FindAllStringSubmatch(content, -1) {
+		refs = append(refs, strings.TrimSpace(match[1]))
+	}
+	return refs
 }
 
 func resolveSlug(content, articleDir, mdPath string) (string, string, error) {

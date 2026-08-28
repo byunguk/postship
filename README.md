@@ -176,7 +176,7 @@ Use a dedicated R2 API credential with the narrowest permissions needed to write
 
 ## Current v0.1 limitations
 
-- Markdown image parsing intentionally handles standard `![alt](path)` syntax only.
+- Local images are detected in standard Markdown `![alt](path)` syntax and HTML `<img src="path">` tags.
 - No image resizing/compression yet.
 - No cleanup of orphaned R2 images yet.
 - R2 credentials are stored in a `0600` config file rather than Keychain.
