@@ -21,6 +21,7 @@ type Options struct {
 
 var markdownImage = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
 var htmlImage = regexp.MustCompile(`(?i)<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>`)
+var frontmatterImage = regexp.MustCompile(`(?mi)^(?:coverImage|cover_image|featured_image|heroImage)\s*:\s*["']?([^"'\r\n#]+)["']?\s*(?:#.*)?$`)
 var frontmatterSlug = regexp.MustCompile(`(?m)^slug\s*:\s*["\']?([^"\'\r\n#]+)["\']?\s*(?:#.*)?$`)
 var frontmatterLanguage = regexp.MustCompile(`(?m)^(?:lang|language)\s*:\s*["\']?([^"\'\r\n#]+)["\']?\s*(?:#.*)?$`)
 var invalidSlugChars = regexp.MustCompile(`[^a-z0-9-]+`)
@@ -177,6 +178,9 @@ func syncTargetRepo(repo string) error {
 
 func imageReferences(content string) []string {
 	refs := make([]string, 0)
+	for _, match := range frontmatterImage.FindAllStringSubmatch(frontmatterBlock(content), -1) {
+		refs = append(refs, strings.TrimSpace(match[1]))
+	}
 	for _, match := range markdownImage.FindAllStringSubmatch(content, -1) {
 		ref := strings.TrimSpace(match[2])
 		if fields := strings.Fields(ref); len(fields) > 0 {
@@ -187,6 +191,21 @@ func imageReferences(content string) []string {
 		refs = append(refs, strings.TrimSpace(match[1]))
 	}
 	return refs
+}
+
+func frontmatterBlock(content string) string {
+	content = strings.TrimPrefix(content, "\ufeff")
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return ""
+	}
+
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			return strings.Join(lines[1:i], "\n")
+		}
+	}
+	return ""
 }
 
 func resolveSlug(content, articleDir, mdPath string) (string, string, error) {
@@ -226,24 +245,7 @@ func languageFromFrontmatter(content string) (string, error) {
 }
 
 func frontmatterValue(content string, pattern *regexp.Regexp) string {
-	content = strings.TrimPrefix(content, "\ufeff")
-	lines := strings.Split(content, "\n")
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
-		return ""
-	}
-
-	end := -1
-	for i := 1; i < len(lines); i++ {
-		if strings.TrimSpace(lines[i]) == "---" {
-			end = i
-			break
-		}
-	}
-	if end == -1 {
-		return ""
-	}
-
-	frontmatter := strings.Join(lines[1:end], "\n")
+	frontmatter := frontmatterBlock(content)
 	m := pattern.FindStringSubmatch(frontmatter)
 	if len(m) < 2 {
 		return ""
