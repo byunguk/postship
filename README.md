@@ -108,6 +108,26 @@ src/content/blog/know-this-before-buying-a-tesla.md
 
 Then PostShip runs `git add`, `git commit`, and `git push`.
 
+Before uploading images or writing Markdown, PostShip requires a clean target repository and runs `git pull --ff-only`. Publishing stops without changing R2 or Git if the repository is dirty or cannot fast-forward.
+
+## Translated articles
+
+English is the default language and keeps the existing output path. Translations use the same explicit English slug plus a BCP 47 language code:
+
+```yaml
+slug: same-english-slug
+lang: ko
+```
+
+Output paths:
+
+```text
+English: src/content/blog/same-english-slug.md
+Korean:  src/content/blog/ko/same-english-slug.md
+```
+
+Translated images are namespaced under `articles/{slug}/{lang}/` in R2 so they cannot overwrite the English images. A translated article without an explicit English slug is rejected.
+
 ## Useful options
 
 ```bash

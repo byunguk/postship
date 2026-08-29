@@ -56,6 +56,32 @@ func TestNormalizeSlug(t *testing.T) {
 	}
 }
 
+func TestLanguageFromFrontmatter(t *testing.T) {
+	tests := []struct {
+		content string
+		want    string
+	}{
+		{"---\ntitle: English\n---", "en"},
+		{"---\nlang: ko\n---", "ko"},
+		{"---\nlanguage: \"ko_KR\"\n---", "ko-kr"},
+	}
+	for _, test := range tests {
+		got, err := languageFromFrontmatter(test.content)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != test.want {
+			t.Fatalf("languageFromFrontmatter() = %q, want %q", got, test.want)
+		}
+	}
+}
+
+func TestLanguageFromFrontmatterRejectsInvalidCode(t *testing.T) {
+	if _, err := languageFromFrontmatter("---\nlang: korean!\n---"); err == nil {
+		t.Fatal("languageFromFrontmatter() expected an error")
+	}
+}
+
 func TestImageReferencesIncludesMarkdownAndHTML(t *testing.T) {
 	content := `![Markdown image](images/markdown.png)
 <figure><img class="article-image" src="images/html.jpg" alt="HTML image" /></figure>

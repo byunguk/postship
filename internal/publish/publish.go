@@ -22,8 +22,10 @@ type Options struct {
 var markdownImage = regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
 var htmlImage = regexp.MustCompile(`(?i)<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>`)
 var frontmatterSlug = regexp.MustCompile(`(?m)^slug\s*:\s*["\']?([^"\'\r\n#]+)["\']?\s*(?:#.*)?$`)
+var frontmatterLanguage = regexp.MustCompile(`(?m)^(?:lang|language)\s*:\s*["\']?([^"\'\r\n#]+)["\']?\s*(?:#.*)?$`)
 var invalidSlugChars = regexp.MustCompile(`[^a-z0-9-]+`)
 var repeatedHyphens = regexp.MustCompile(`-+`)
+var validLanguage = regexp.MustCompile(`^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$`)
 
 func Run(articleDir string, opts Options) error {
 	cfg, _, err := config.Load()
@@ -32,6 +34,11 @@ func Run(articleDir string, opts Options) error {
 	}
 	if err := gitutil.EnsureRepo(cfg.RepoPath); err != nil {
 		return fmt.Errorf("configured repo_path is not a Git repository: %w", err)
+	}
+	if !opts.DryRun {
+		if err := syncTargetRepo(cfg.RepoPath); err != nil {
+			return err
+		}
 	}
 
 	articleDir, err = filepath.Abs(articleDir)
@@ -52,6 +59,14 @@ func Run(articleDir string, opts Options) error {
 		return err
 	}
 	fmt.Printf("Using slug: %s (%s)\n", slug, slugSource)
+	language, err := languageFromFrontmatter(string(content))
+	if err != nil {
+		return err
+	}
+	if language != "en" && slugSource != "frontmatter" {
+		return fmt.Errorf("translated articles must declare the same explicit English slug as the English article")
+	}
+	fmt.Printf("Using language: %s\n", language)
 
 	refs := imageReferences(string(content))
 	if len(refs) == 0 {
@@ -78,7 +93,12 @@ func Run(articleDir string, opts Options) error {
 			result = strings.ReplaceAll(result, cleanRef, url)
 			continue
 		}
-		key := filepath.ToSlash(filepath.Join("articles", slug, filepath.Base(imgPath)))
+		keyParts := []string{"articles", slug}
+		if language != "en" {
+			keyParts = append(keyParts, language)
+		}
+		keyParts = append(keyParts, filepath.Base(imgPath))
+		key := filepath.ToSlash(filepath.Join(keyParts...))
 		var url string
 		if opts.DryRun {
 			url = strings.TrimRight(cfg.R2.PublicURL, "/") + "/" + key
@@ -95,6 +115,9 @@ func Run(articleDir string, opts Options) error {
 	}
 
 	destDir := filepath.Join(cfg.RepoPath, filepath.FromSlash(cfg.ContentDir))
+	if language != "en" {
+		destDir = filepath.Join(destDir, language)
+	}
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return err
 	}
@@ -121,6 +144,9 @@ func Run(articleDir string, opts Options) error {
 		return nil
 	}
 	msg := fmt.Sprintf("Publish %s (%s)", slug, time.Now().Format("2006-01-02"))
+	if language != "en" {
+		msg = fmt.Sprintf("Publish %s [%s] (%s)", slug, language, time.Now().Format("2006-01-02"))
+	}
 	if _, err := gitutil.Run(cfg.RepoPath, "commit", "-m", msg); err != nil {
 		return err
 	}
@@ -130,6 +156,21 @@ func Run(articleDir string, opts Options) error {
 			return err
 		}
 		fmt.Println("Pushed to GitHub. Cloudflare Pages should deploy from the GitHub update.")
+	}
+	return nil
+}
+
+func syncTargetRepo(repo string) error {
+	status, err := gitutil.Run(repo, "status", "--porcelain")
+	if err != nil {
+		return fmt.Errorf("check target repository before pull: %w", err)
+	}
+	if status != "" {
+		return fmt.Errorf("target repository has uncommitted changes; commit or stash them before publishing")
+	}
+	fmt.Println("Syncing target repository (git pull --ff-only)...")
+	if _, err := gitutil.Run(repo, "pull", "--ff-only"); err != nil {
+		return fmt.Errorf("sync target repository before publishing: %w", err)
 	}
 	return nil
 }
@@ -169,6 +210,22 @@ func resolveSlug(content, articleDir, mdPath string) (string, string, error) {
 }
 
 func slugFromFrontmatter(content string) string {
+	return frontmatterValue(content, frontmatterSlug)
+}
+
+func languageFromFrontmatter(content string) (string, error) {
+	language := strings.ToLower(strings.TrimSpace(frontmatterValue(content, frontmatterLanguage)))
+	if language == "" {
+		return "en", nil
+	}
+	language = strings.ReplaceAll(language, "_", "-")
+	if !validLanguage.MatchString(language) {
+		return "", fmt.Errorf("invalid article language %q; use a BCP 47 code such as en, ko, or ko-kr", language)
+	}
+	return language, nil
+}
+
+func frontmatterValue(content string, pattern *regexp.Regexp) string {
 	content = strings.TrimPrefix(content, "\ufeff")
 	lines := strings.Split(content, "\n")
 	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
@@ -187,7 +244,7 @@ func slugFromFrontmatter(content string) string {
 	}
 
 	frontmatter := strings.Join(lines[1:end], "\n")
-	m := frontmatterSlug.FindStringSubmatch(frontmatter)
+	m := pattern.FindStringSubmatch(frontmatter)
 	if len(m) < 2 {
 		return ""
 	}
