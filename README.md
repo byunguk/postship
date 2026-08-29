@@ -88,6 +88,8 @@ postship publish ./buying-a-tesla
 
 PostShip uses the frontmatter `slug` as the canonical publishing slug. If `slug` is omitted, it falls back to the article directory name. The same slug is used for both the published Markdown filename and the R2 object path.
 
+Local image paths in Markdown, HTML `<img>` tags, and common frontmatter image fields (`coverImage`, `cover_image`, `featured_image`, and `heroImage`) are uploaded to R2 and rewritten to their public URLs. This allows sites to normalize legacy frontmatter names without losing the cover image during publishing.
+
 For the example above, PostShip uploads the image to:
 
 ```text
@@ -196,7 +198,7 @@ Use a dedicated R2 API credential with the narrowest permissions needed to write
 
 ## Current v0.1 limitations
 
-- Local images are detected in standard Markdown `![alt](path)` syntax and HTML `<img src="path">` tags.
+- Local images are detected in standard Markdown `![alt](path)` syntax, HTML `<img src="path">` tags, and common frontmatter image fields.
 - No image resizing/compression yet.
 - No cleanup of orphaned R2 images yet.
 - R2 credentials are stored in a `0600` config file rather than Keychain.
